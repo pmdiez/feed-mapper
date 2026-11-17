@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed Mapper Pro</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2214%22 font-size=%2214%22>🧩</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root {
+  --bg: #f8fafc; --card: #ffffff; --tx: #0f172a; --mut: #64748b; --bd: #e2e8f0;
+  --ac: #0d9488; --acx: #ffffff; --ac-hover: #0f766e;
+  --bad: #dc2626; --badbg: #fef2f2; --ed: #fefce8; --ok: #16a34a; --okbg: #f0fdf4;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f172a; --card: #1e293b; --tx: #f1f5f9; --mut: #94a3b8; --bd: #334155;
+    --ac: #14b8a6; --acx: #0f172a; --ac-hover: #2dd4bf;
+    --bad: #f87171; --badbg: #450a0a; --ed: #422006; --ok: #4ade80; --okbg: #052e16;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--tx); font: 14px/1.5 "Inter", system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 1280px; margin: 0 auto; padding: 24px 20px 80px; }
+
+header { margin-bottom: 24px; border-bottom: 1px solid var(--bd); padding-bottom: 16px; }
+h1 { font-size: 24px; margin: 0 0 4px; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+p.sub { margin: 0; color: var(--mut); font-size: 15px; }
+nav { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+nav button {
+  border: 1px solid var(--bd); background: var(--card); color: var(--mut);
+  padding: 8px 16px; border-radius: 6px; cursor: pointer; font: inherit; font-weight: 500;
+  transition: all 0.2s ease;
+}
+nav button:hover:not(:disabled) { border-color: var(--ac); color: var(--ac); }
+nav button.on { background: var(--ac); color: var(--acx); border-color: var(--ac); }
+nav button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+section { display: none; background: var(--card); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); animation: fadeIn 0.3s ease; }
+section.on { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+#drop {
+  border: 2px dashed var(--bd); border-radius: 12px; padding: 48px 24px; text-align: center;
+  color: var(--mut); transition: all 0.2s ease; background: var(--bg);
+}
+#drop.hot { border-color: var(--ac); background: color-mix(in srgb, var(--ac) 5%, transparent); color: var(--tx); }
+#drop p { margin: 0 0 16px; font-size: 16px; }
+
+button.p, label.p {
+  background: var(--ac); color: var(--acx); border: 0; padding: 8px 16px; border-radius: 6px;
+  cursor: pointer; font: inherit; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+  transition: background 0.2s;
+}
+button.p:hover, label.p:hover { background: var(--ac-hover); }
+button.s, label.s {
+  background: transparent; color: var(--tx); border: 1px solid var(--bd); padding: 7px 14px;
+  border-radius: 6px; cursor: pointer; font: inherit; font-weight: 500; transition: all 0.2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+button.s:hover, label.s:hover { border-color: var(--mut); background: var(--bg); }
+select, input[type=text], input[type=search] {
+  font: inherit; color: var(--tx); background: var(--bg); border: 1px solid var(--bd);
+  border-radius: 6px; padding: 7px 10px; max-width: 100%; transition: border-color 0.2s;
+}
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--ac); outline-offset: 1px; border-color: var(--ac); }
+
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 16px 0; }
+.mut { color: var(--mut); font-size: 13px; }
+.flex-end { margin-left: auto; }
+
+.wrap { overflow-x: auto; border: 1px solid var(--bd); border-radius: 8px; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--bd); text-align: left; vertical-align: middle; }
+th { background: var(--bg); font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 10; color: var(--mut); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: color-mix(in srgb, var(--ac) 3%, transparent); }
+
+#maprows td.smp { color: var(--mut); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 12px; }
+.args input { width: 120px; margin-right: 6px; font-size: 12px; }
+.req { margin-left: 6px; font-size: 11px; color: var(--bad); background: var(--badbg); padding: 2px 6px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+
+#prev td { max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; position: relative; }
+#prev td:focus { white-space: normal; overflow: visible; outline: 2px solid var(--ac); z-index: 2; }
+/* .bad siempre gana sobre .ed, y ambos ganan sobre el hover de fila */
+td.ed { background: var(--ed) !important; }
+td.ed::after { content: '✎'; position: absolute; top: 2px; right: 2px; font-size: 10px; color: var(--mut); }
+td.bad { background: var(--badbg) !important; color: var(--bad); font-weight: 500; }
+td.bad.ed::after { color: var(--bad); }
+
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 99px; background: var(--badbg); color: var(--bad); margin: 0 6px 6px 0; font-size: 12px; font-weight: 500; }
+.chip.ok { background: var(--okbg); color: var(--ok); }
+
+#loader {
+  position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 100; flex-direction: column; gap: 16px;
+}
+#loader.on { display: flex; }
+.spinner { width: 40px; height: 40px; border: 3px solid var(--bd); border-top-color: var(--ac); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#toast {
+  position: fixed; bottom: 24px; right: 24px; background: var(--card); border: 1px solid var(--bd);
+  padding: 12px 20px; border-radius: 8px; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 101; font-weight: 500; max-width: 90vw;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.error { border-left: 4px solid var(--bad); }
+#toast.success { border-left: 4px solid var(--ok); }
+</style>
+</head>
+<body>
+
+<div id="loader"><div class="spinner"></div><div id="loader-text" class="mut">Procesando...</div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<main>
+<header>
+  <h1>🧩 Feed Mapper Pro</h1>
+  <p class="sub">Procesa, mapea y exporta feeds para Google Merchant. 100% en tu navegador: los datos no se suben a ningún servidor.</p>
+  <nav>
+    <button id="t1" class="on">1. Cargar feed</button>
+    <button id="t2" disabled>2. Mapear campos</button>
+    <button id="t3" disabled>3. Revisar y exportar</button>
+  </nav>
+</header>
+
+<section id="s1" class="on">
+  <div id="drop">
+    <p>Arrastra y suelta tu archivo aquí</p>
+    <p class="mut" style="margin-bottom: 16px;">Soporta .csv, .tsv, .txt y .xml (recomendado: &lt;100 MB y &lt;50.000 filas)</p>
+    <div class="row" style="justify-content: center;">
+      <label class="mut" style="font-size:12px;">Codificación:
+        <select id="enc" style="width: 200px;">
+          <option value="auto">Automática (recomendado)</option>
+          <option value="UTF-8">UTF-8</option>
+          <option value="Windows-1252">Windows-1252 / Latin-1</option>
+        </select>
+      </label>
+      <label class="p">📁 Elegir archivo<input id="file" type="file" accept=".csv,.tsv,.txt,.xml,.rss" hidden></label>
+    </div>
+  </div>
+  <div id="info" class="row mut"></div>
+
+  <div id="xmlsel" class="row" hidden style="background: var(--bg); padding: 16px; border-radius: 8px; border: 1px solid var(--bd);">
+    <span>📦 Elemento XML que representa un producto:</span>
+    <select id="itemtag" style="flex:1; max-width: 300px;"></select>
+  </div>
+</section>
+
+<section id="s2">
+  <div class="row" style="justify-content: space-between; align-items: flex-end;">
+    <div>
+      <label class="mut" for="schema" style="display:block; margin-bottom:4px; font-weight:600;">Esquema de destino</label>
+      <select id="schema" style="min-width: 250px;"></select>
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="s" id="exportMap">💾 Exportar mapeo</button>
+      <label class="s">📂 Importar mapeo<input type="file" id="importMap" accept=".json" hidden></label>
+      <button class="s" id="resetMap" style="color:var(--bad); border-color:var(--bad);">🗑️ Limpiar</button>
+    </div>
+  </div>
+  <p class="mut" style="margin-top:-8px; margin-bottom:16px;">💡 El mapeo se guarda automáticamente en este navegador. Puedes exportarlo a un archivo para reutilizarlo en otro equipo.</p>
+
+  <div class="wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:20%">Campo destino</th>
+          <th style="width:25%">Campo origen</th>
+          <th style="width:20%">Transformación</th>
+          <th style="width:20%">Parámetros</th>
+          <th style="width:15%">Vista previa (fila 1)</th>
+        </tr>
+      </thead>
+      <tbody id="maprows"></tbody>
+    </table>
+  </div>
+
+  <div class="row" style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--bd);">
+    <input id="newf" type="text" placeholder="Nuevo campo personalizado (ej: custom_label_0)" style="flex:1; max-width: 400px;">
+    <button class="s" id="addf">+ Añadir campo</button>
+    <button class="p flex-end" id="to3">Revisar resultado →</button>
+  </div>
+</section>
+
+<section id="s3">
+  <div id="stats" style="margin-bottom: 16px;"></div>
+
+  <div class="row" style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--bd);">
+    <input id="searchPrev" type="search" placeholder="🔍 Buscar por ID o título en la vista previa..." style="flex:1; min-width: 200px;">
+    <span class="mut">Se muestran máx. 100 filas. Haz clic en una celda para corregirla; Enter para confirmar. Si cambias el mapeo, las ediciones manuales se descartan.</span>
+  </div>
+
+  <div class="wrap" style="max-height: 55vh; margin-top: 12px;">
+    <table id="prev">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="row" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--bd);">
+    <div style="display:flex; gap:12px; flex:1; flex-wrap:wrap;">
+      <label style="flex:1; min-width:200px;">Título del canal <input id="chT" type="text" value="Mi Tienda Online" style="width:100%;"></label>
+      <label style="flex:1; min-width:200px;">URL base <input id="chL" type="text" value="https://example.com" style="width:100%;"></label>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="s" id="dlc">⬇ Descargar CSV</button>
+      <button class="p" id="dlx">⬇ Descargar XML</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<script>
+// --- Utilidades ---
+const $ = s => document.querySelector(s);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const xe = s => esc(s).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+const words = s => (s || '').split(' ').filter(Boolean);
+const mk = (r, o = '') => [...words(r).map(x => [x, 1]), ...words(o).map(x => [x, 0])];
+const norm = s => s.toLowerCase().replace(/^g:/, '').replace(/[^a-z0-9]/g, '');
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+// contenteditable="plaintext-only" no existe en todos los navegadores: si no, la celda no sería editable
+const CE = (() => { const d = document.createElement('div'); try { d.contentEditable = 'plaintext-only'; } catch (e) {} return d.contentEditable === 'plaintext-only' ? 'plaintext-only' : 'true'; })();
+
+// --- Configuración y estado ---
+const SCHEMAS = {
+  'Google Merchant': { f: mk('id title description link image_link price availability', 'brand gtin mpn condition google_product_category product_type sale_price additional_image_link item_group_id color size gender age_group shipping_weight'), x: 1 },
+  'Meta Catalog': { f: mk('id title description availability condition price link image_link brand', 'additional_image_link sale_price google_product_category item_group_id color size gender age_group'), x: 1 },
+  'Personalizado (columnas de origen)': { f: null, x: 0 }
+};
+
+// norm() elimina guiones bajos, así que los alias se escriben sin ellos
+const AL = {
+  id: 'idvariante id sku reference referencia productid codigo ref',
+  title: 'title name nombre titulo productname',
+  description: 'bodyhtml description descripcion desc summary',
+  link: 'link url producturl enlace',
+  image_link: 'imagenprincipal imagelink image imageurl imagen picture img',
+  price: 'preciogoogle price precio pvp',
+  sale_price: 'preciofertagoogle saleprice',
+  availability: 'variantinventoryqty availability stock disponibilidad quantity qty',
+  brand: 'vendor brand marca manufacturer',
+  gtin: 'variantbarcode gtin ean upc barcode',
+  condition: 'condition estado',
+  product_type: 'type producttype category categoria',
+  google_product_category: 'productcategory',
+  item_group_id: 'handle itemgroupid groupid',
+  color: 'color colour',
+  size: 'size talla',
+  additional_image_link: 'imagenesadicionales additionalimagelink images'
+};
+
+const TR = [
+  ['none', 'Copiar tal cual'], ['fixed', 'Valor fijo'], ['tpl', 'Plantilla {campo}'],
+  ['strip', 'Quitar HTML'], ['trim', 'Recortar espacios'], ['upper', 'MAYÚSCULAS'],
+  ['lower', 'minúsculas'], ['replace', 'Buscar y reemplazar'], ['price', 'Formato precio (10.00 EUR)'],
+  ['avail', 'Stock a disponibilidad']
+];
+const TRK = TR.map(t => t[0]);
+
+const S = { rows: [], cols: [], schema: 'Google Merchant', fields: [], map: {}, ov: {}, active: [], xml: null };
+
+// --- Interfaz ---
+let toastTimer;
+function toast(msg, type = 'success') {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+function showLoader(show, text = 'Procesando...') {
+  $('#loader-text').textContent = text;
+  $('#loader').classList.toggle('on', show);
+}
+
+// --- Números: acepta 1,234.56 / 1.234,56 / 19.99 / 12,5 ---
+function num(v) {
+  const s = String(v ?? '').replace(/[^\d.,-]/g, '');
+  const d = s.lastIndexOf('.'), c = s.lastIndexOf(',');
+  if (d < 0 && c < 0) return parseFloat(s);
+  const sep = d > c ? '.' : ',', other = sep === '.' ? ',' : '.';
+  let dec = true;
+  if (s.includes(other)) dec = true;                          // ambos presentes: el último es el decimal
+  else if (s.split(sep).length > 2) dec = false;              // 1.234.567
+  else if (/^-?[1-9]\d{0,2}[.,]\d{3}$/.test(s)) dec = false;  // 1.234 se interpreta como miles
+  const t = dec ? s.split(other).join('').replace(sep, '.') : s.split(sep).join('');
+  return parseFloat(t);
+}
+
+// --- Carga de archivos ---
+async function detectEnc(f) {
+  // UTF-8 estricto sobre el primer MB; si falla, Windows-1252. stream:true tolera un carácter cortado al final del trozo.
+  const buf = await f.slice(0, 1048576).arrayBuffer();
+  try { new TextDecoder('utf-8', { fatal: true }).decode(buf, { stream: true }); return 'UTF-8'; }
+  catch (e) { return 'Windows-1252'; }
+}
+async function readText(f, enc) {
+  const buf = await f.arrayBuffer();
+  if (enc === 'auto') {                                       // en XML manda la declaración encoding="..."
+    const head = new TextDecoder('latin1').decode(buf.slice(0, 200));
+    const m = /encoding=["']([\w.-]+)["']/i.exec(head);
+    enc = m ? m[1] : 'utf-8';
+  }
+  try { return new TextDecoder(enc).decode(buf); }
+  catch (e) { return new TextDecoder('utf-8').decode(buf); }
+}
+
+function loaded(rows, cols) {
+  S.rows = rows; S.cols = cols; S.ov = {};
+  $('#info').innerHTML = `<strong>${rows.length.toLocaleString()}</strong> productos · <strong>${cols.length}</strong> columnas detectadas.`;
+  $('#t2').disabled = false; $('#t3').disabled = false;
+  setSchema(S.schema);
+  go(2);
+}
+
+async function loadFile(f) {
+  if (f.size > 100 * 1024 * 1024) toast('El archivo supera los 100 MB. Puede ir lento o quedarse sin memoria.', 'error');
+  showLoader(true, 'Leyendo archivo...');
+  const ext = f.name.split('.').pop().toLowerCase();
+  let enc = $('#enc').value;
+  try {
+    if (['xml', 'rss'].includes(ext)) {
+      parseXML(await readText(f, enc));
+    } else {
+      if (enc === 'auto') enc = await detectEnc(f);
+      Papa.parse(f, {
+        header: true, skipEmptyLines: true, worker: true, encoding: enc,
+        complete: r => {
+          try {
+            if (!r.data || !r.data.length) { toast('No se encontraron filas en el archivo.', 'error'); return; }
+            $('#xmlsel').hidden = true; S.xml = null;
+            loaded(r.data, r.meta.fields || []);
+            toast('Archivo cargado correctamente');
+          } catch (e) { toast('Error: ' + e.message, 'error'); }
+          finally { showLoader(false); }
+        },
+        error: e => { showLoader(false); toast('Error: ' + e.message, 'error'); }
+      });
+    }
+  } catch (e) { showLoader(false); toast('Error al leer el archivo: ' + e.message, 'error'); }
+}
+
+function parseXML(t) {
+  const doc = new DOMParser().parseFromString(t, 'application/xml');
+  if (doc.querySelector('parsererror')) { showLoader(false); toast('El XML no es válido.', 'error'); return; }
+  const cnt = {};
+  doc.querySelectorAll('*').forEach(e => { if (e.children.length) cnt[e.tagName] = (cnt[e.tagName] || 0) + 1; });
+  const cand = Object.keys(cnt).filter(k => cnt[k] > 1);
+  if (!cand.length) { showLoader(false); toast('No se encontraron elementos repetidos (productos) en el XML.', 'error'); return; }
+
+  // Los elementos anidados dentro de otro candidato (p. ej. varios <shipping> por producto) van al final
+  const nest = {};
+  cand.forEach(k => {
+    let p = doc.getElementsByTagName(k)[0].parentElement, n = 0;
+    while (p) { if (p.tagName !== k && cand.includes(p.tagName)) { n = 1; break; } p = p.parentElement; }
+    nest[k] = n;
+  });
+  const tags = [...cand].sort((a, b) => nest[a] - nest[b] || cnt[b] - cnt[a]);
+  S.xml = doc;
+  $('#itemtag').innerHTML = tags.map(k => `<option value="${esc(k)}">${esc(k)} (${cnt[k]} encontrados)</option>`).join('');
+  $('#xmlsel').hidden = false;
+  fromTag(tags[0]);
+}
+
+function flat(el) {
+  const o = {};
+  for (const a of el.attributes) o['@' + a.name] = a.value;
+  (function walk(n, p) {
+    for (const c of n.children) {
+      const k = p ? p + '.' + c.tagName : c.tagName;
+      for (const a of c.attributes) o[k + '@' + a.name] = a.value;   // p. ej. price@currency
+      if (c.children.length) walk(c, k);
+      else { const v = c.textContent.trim(); o[k] = k in o ? o[k] + ' | ' + v : v; }
+    }
+  })(el, '');
+  return o;
+}
+
+function fromTag(tag) {
+  showLoader(true, 'Aplanando estructura XML...');
+  setTimeout(() => {
+    try {
+      const rows = [...S.xml.getElementsByTagName(tag)].map(flat);
+      const cols = [], seen = new Set();
+      rows.forEach(r => Object.keys(r).forEach(k => { if (!seen.has(k)) { seen.add(k); cols.push(k); } }));
+      loaded(rows, cols);
+    } catch (e) { toast('Error al procesar el XML: ' + e.message, 'error'); }
+    finally { showLoader(false); }
+  }, 50);
+}
+
+// --- Mapeo ---
+function newMap() { return { src: '', tr: 'none', a: '', b: '' }; }
+
+function extras() {   // campos añadidos a mano que no pertenecen al esquema base
+  const sc = SCHEMAS[S.schema], base = sc.f ? sc.f.map(a => a[0]) : S.cols;
+  return S.fields.map(a => a[0]).filter(f => !base.includes(f));
+}
+function saveMap() {
+  try { localStorage.setItem('fm:' + S.schema, JSON.stringify({ v: 2, schema: S.schema, map: S.map, extra: extras() })); } catch (e) {}
+}
+// Aplica un mapeo guardado o importado validando cada valor; devuelve cuántos campos se aplicaron
+function applyMap(obj) {
+  let n = 0;
+  const m = obj && typeof obj.map === 'object' && obj.map ? obj.map : {};
+  (Array.isArray(obj.extra) ? obj.extra : []).forEach(f => {
+    if (typeof f === 'string' && f.trim() && !has(S.map, f)) { S.fields.push([f, 0]); S.map[f] = newMap(); }
+  });
+  for (const f in m) {
+    if (!has(S.map, f) || !m[f] || typeof m[f] !== 'object') continue;
+    const x = m[f];
+    S.map[f] = {
+      src: typeof x.src === 'string' && S.cols.includes(x.src) ? x.src : '',
+      tr: TRK.includes(x.tr) ? x.tr : 'none',
+      a: typeof x.a === 'string' ? x.a : '',
+      b: typeof x.b === 'string' ? x.b : ''
+    };
+    n++;
+  }
+  return n;
+}
+
+function setSchema(name) {
+  S.schema = name; const sc = SCHEMAS[name];
+  S.fields = sc.f ? sc.f.map(a => [...a]) : S.cols.map(c => [c, 0]);
+  S.map = {}; S.fields.forEach(([f]) => S.map[f] = newMap());
+
+  S.fields.forEach(([f]) => {
+    const m = S.map[f], al = words(AL[f]); al.push(norm(f));
+    const c = S.cols.find(c => { const n = norm(c); return n && al.includes(n); });
+    if (c) {
+      m.src = c;
+      if (sc.x) {
+        if (f === 'price' || f === 'sale_price') { m.tr = 'price'; m.a = 'EUR'; }
+        if (f === 'availability') m.tr = 'avail';
+        if (f === 'description') m.tr = 'strip';
+      }
+    } else if (f === 'condition' && sc.x) { m.tr = 'fixed'; m.a = 'new'; }
+  });
+
+  try {
+    const sv = JSON.parse(localStorage.getItem('fm:' + name) || 'null');
+    if (sv) applyMap(sv.v === 2 ? sv : { map: sv });     // v2 = formato actual; si no, es el formato antiguo (solo el mapa)
+  } catch (e) {}
+
+  $('#schema').innerHTML = Object.keys(SCHEMAS).map(k => `<option ${k === name ? 'selected' : ''}>${esc(k)}</option>`).join('');
+  renderMap();
+}
+
+function argsHtml(m) {
+  const i = (k, p) => `<input type="text" data-k="${k}" placeholder="${p}" value="${esc(m[k])}">`;
+  if (m.tr === 'fixed') return i('a', 'Valor fijo');
+  if (m.tr === 'tpl') return i('a', 'Ej: {title} - {brand}');
+  if (m.tr === 'price') return i('a', 'Moneda (EUR, USD, MXN)');
+  if (m.tr === 'replace') return i('a', 'Buscar') + i('b', 'Reemplazar');
+  return '<span class="mut">Sin parámetros</span>';
+}
+
+function renderMap() {
+  $('#maprows').innerHTML = S.fields.map(([f, r]) => {
+    const m = S.map[f];
+    return `<tr data-f="${esc(f)}">
+      <td><b>${esc(f)}</b>${r ? '<span class="req">Req</span>' : ''}</td>
+      <td><select data-k="src"><option value="">(sin asignar)</option>${S.cols.map(c => `<option value="${esc(c)}" ${c === m.src ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
+      <td><select data-k="tr">${TR.map(([k, l]) => `<option value="${k}" ${k === m.tr ? 'selected' : ''}>${l}</option>`).join('')}</select></td>
+      <td class="args">${argsHtml(m)}</td>
+      <td class="smp"></td>
+    </tr>`;
+  }).join('');
+  S.fields.forEach((_, i) => sample(i));
+}
+
+function sample(i) {
+  const f = S.fields[i][0], tr = $('#maprows').children[i];
+  if (!tr) return;
+  const v = calc(f, S.rows[0] || {});
+  tr.querySelector('.smp').textContent = v.slice(0, 80) + (v.length > 80 ? '…' : '');
+}
+
+$('#maprows').addEventListener('input', e => {
+  const t = e.target, tr = t.closest('tr'); if (!tr || !t.dataset.k) return;
+  const f = tr.dataset.f, m = S.map[f]; m[t.dataset.k] = t.value;
+  if (t.dataset.k === 'tr') tr.querySelector('.args').innerHTML = argsHtml(m);
+  sample([...tr.parentNode.children].indexOf(tr));
+  saveMap();
+  S.ov = {};   // al cambiar el mapeo se descartan las ediciones manuales
+});
+
+$('#schema').onchange = e => setSchema(e.target.value);
+
+$('#resetMap').onclick = () => {
+  if (!confirm('¿Borrar todo el mapeo y empezar de cero?')) return;
+  try { localStorage.removeItem('fm:' + S.schema); } catch (e) {}
+  setSchema(S.schema);
+  toast('Mapeo reiniciado');
+};
+
+$('#addf').onclick = () => {
+  const n = $('#newf').value.trim(); if (!n || has(S.map, n)) return;
+  S.fields.push([n, 0]); S.map[n] = newMap(); $('#newf').value = '';
+  renderMap(); saveMap(); toast('Campo añadido');
+};
+
+$('#exportMap').onclick = () => {
+  const data = JSON.stringify({ v: 2, schema: S.schema, map: S.map, extra: extras() }, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  a.download = 'mapeo_' + S.schema.replace(/[^A-Za-z0-9]+/g, '_') + '.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('Mapeo exportado');
+};
+
+$('#importMap').onchange = e => {
+  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const j = JSON.parse(r.result);
+      const o = j && j.v === 2 ? j : { map: j };
+      if (typeof o.schema === 'string' && o.schema !== S.schema && has(SCHEMAS, o.schema)) setSchema(o.schema);
+      const n = applyMap(o);
+      saveMap(); renderMap();
+      toast(`Mapeo importado: ${n} campos aplicados`);
+    } catch (err) { toast('Archivo JSON inválido', 'error'); }
+  };
+  r.onerror = () => toast('No se pudo leer el archivo', 'error');
+  r.readAsText(file);
+};
+
+// --- Cálculo de valores ---
+function calc(f, row) {
+  const m = S.map[f]; if (!m) return '';
+  const v = m.src ? String(row[m.src] ?? '') : '';
+  switch (m.tr) {
+    case 'fixed': return m.a;
+    case 'tpl': return m.a.replace(/\{([^}]+)\}/g, (_, k) => row[k] ?? '');
+    case 'strip': return v.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    case 'trim': return v.trim();
+    case 'upper': return v.toUpperCase();
+    case 'lower': return v.toLowerCase();
+    case 'replace': return m.a ? v.split(m.a).join(m.b) : v;
+    case 'price': { const n = num(v); return isNaN(n) ? '' : n.toFixed(2) + ' ' + (m.a || 'EUR'); }
+    case 'avail': {
+      const s = v.toLowerCase().trim(), n = parseFloat(s);
+      const ok = !isNaN(n) ? n > 0 : /^(in|yes|si|sí|true|disponible|available)/.test(s);
+      return ok ? 'in_stock' : 'out_of_stock';
+    }
+    default: return v;
+  }
+}
+const val = (f, i) => { const o = S.ov[i]; return o && f in o ? o[f] : calc(f, S.rows[i]); };
+
+// --- Revisión ---
+let currentFilter = '';
+
+function stats() {
+  const req = S.active.filter(a => a[1]).map(a => a[0]), emp = {}, seen = new Set();
+  req.forEach(f => emp[f] = 0);
+  const hasId = has(S.map, 'id'); let dup = 0;
+  for (let i = 0; i < S.rows.length; i++) {          // una sola pasada sobre TODAS las filas
+    for (const f of req) if (!val(f, i)) emp[f]++;
+    if (hasId) { const v = val('id', i); if (v) { if (seen.has(v)) dup++; else seen.add(v); } }
+  }
+  let h = `<div class="row mut" style="margin:0"><strong>${S.rows.length.toLocaleString()}</strong> productos totales · <strong>${S.active.length}</strong> campos en el feed</div>`;
+  let bad = 0;
+  req.forEach(f => { if (emp[f]) { bad++; h += `<span class="chip">⚠️ ${esc(f)}: ${emp[f].toLocaleString()} vacíos</span>`; } });
+  if (dup) { bad++; h += `<span class="chip">⚠️ id: ${dup.toLocaleString()} duplicados</span>`; }
+  if (!bad) h += '<span class="chip ok">✅ Sin problemas detectados en campos obligatorios</span>';
+  $('#stats').innerHTML = h;
+}
+
+function renderPreview() {
+  $('#prev thead').innerHTML = '<tr>' + S.active.map(([f]) => `<th>${esc(f)}</th>`).join('') + '</tr>';
+
+  const idx = [];
+  for (let i = 0; i < S.rows.length && (currentFilter || idx.length < 100); i++) {
+    if (!currentFilter || String(val('id', i)).toLowerCase().includes(currentFilter) || String(val('title', i)).toLowerCase().includes(currentFilter)) idx.push(i);
+    if (idx.length >= 100) break;
+  }
+
+  let h = '';
+  idx.forEach(i => {
+    h += '<tr>' + S.active.map(([f, r]) => {
+      const v = val(f, i);
+      return `<td contenteditable="${CE}" data-i="${i}" data-f="${esc(f)}" data-r="${r}" class="${r && !v ? 'bad' : ''}${S.ov[i] && f in S.ov[i] ? ' ed' : ''}">${esc(v)}</td>`;
+    }).join('') + '</tr>';
+  });
+  $('#prev tbody').innerHTML = h || '<tr><td colspan="100%" style="text-align:center; padding:24px; color:var(--mut);">No se encontraron resultados con ese filtro.</td></tr>';
+  stats();
+}
+
+$('#prev').addEventListener('focusout', e => {
+  const t = e.target.closest('td[data-f]'); if (!t) return;
+  const i = +t.dataset.i, f = t.dataset.f, txt = t.textContent;
+  if (txt !== val(f, i)) { S.ov[i] = { ...S.ov[i], [f]: txt }; t.classList.add('ed'); }
+  t.classList.toggle('bad', t.dataset.r === '1' && !txt);
+  stats();
+});
+
+$('#prev').addEventListener('keydown', e => {          // Enter confirma la celda en vez de insertar un salto de línea
+  if (e.key === 'Enter' && e.target.matches('td[data-f]')) { e.preventDefault(); e.target.blur(); }
+});
+
+$('#searchPrev').addEventListener('input', debounce(() => {
+  currentFilter = $('#searchPrev').value.toLowerCase().trim();
+  renderPreview();
+}, 200));
+
+// --- Exportación ---
+function dl(name, text, mime) {
+  try {
+    const a = document.createElement('a');
+    const finalText = mime.includes('csv') ? '\uFEFF' + text : text;   // BOM para que Excel respete las tildes
+    a.href = URL.createObjectURL(new Blob([finalText], { type: mime }));
+    a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast('Descarga iniciada');
+  } catch (e) { toast('Error al generar el archivo: ' + e.message, 'error'); }
+  finally { showLoader(false); }
+}
+
+function table() { return S.rows.map((_, i) => S.active.map(([f]) => val(f, i))); }
+
+$('#dlc').onclick = () => {
+  showLoader(true, 'Generando CSV...');
+  setTimeout(() => {
+    try { dl('feed.csv', Papa.unparse({ fields: S.active.map(a => a[0]), data: table() }), 'text/csv;charset=utf-8'); }
+    catch (e) { showLoader(false); toast('Error al generar el CSV: ' + e.message, 'error'); }
+  }, 50);
+};
+
+$('#dlx').onclick = () => {
+  showLoader(true, 'Generando XML...');
+  setTimeout(() => {
+    try {
+      const g = SCHEMAS[S.schema].x, bare = ['title', 'description', 'link'];
+      const tag = f => { let t = f.replace(/[^A-Za-z0-9_.-]/g, '_'); if (!/^[A-Za-z_]/.test(t)) t = '_' + t; return g && !bare.includes(f) ? 'g:' + t : t; };
+      const o = ['<?xml version="1.0" encoding="UTF-8"?>'];
+      if (g) o.push('<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>', `<title>${xe($('#chT').value)}</title><link>${xe($('#chL').value)}</link><description>Feed de productos</description>`);
+      else o.push('<items>');
+      const it = g ? 'item' : 'product';
+      let i = 0; const chunk = 1000;
+
+      function processChunk() {
+        try {
+          const end = Math.min(i + chunk, S.rows.length);
+          for (; i < end; i++) {
+            o.push(`<${it}>`);
+            S.active.forEach(([f]) => {
+              const v = val(f, i); if (v === '') return;
+              (f === 'additional_image_link' ? v.split(/\s*\|\s*/) : [v]).forEach(x => o.push(`<${tag(f)}>${xe(x)}</${tag(f)}>`));
+            });
+            o.push(`</${it}>`);
+          }
+          if (i < S.rows.length) {
+            $('#loader-text').textContent = `Generando XML... ${Math.round(i / S.rows.length * 100)}%`;
+            setTimeout(processChunk, 0);
+          } else {
+            o.push(g ? '</channel></rss>' : '</items>');
+            dl('feed.xml', o.join('\n'), 'application/xml;charset=utf-8');
+          }
+        } catch (err) { showLoader(false); toast('Error al generar el XML: ' + err.message, 'error'); }
+      }
+      processChunk();
+    } catch (err) { showLoader(false); toast('Error al generar el XML: ' + err.message, 'error'); }
+  }, 50);
+};
+
+// --- Navegación y eventos ---
+function go(n) {
+  [1, 2, 3].forEach(k => {
+    $('#s' + k).classList.toggle('on', k === n);
+    $('#t' + k).classList.toggle('on', k === n);
+  });
+  if (n === 3) {
+    S.active = S.fields.filter(([f, r]) => r || S.rows.some((_, i) => val(f, i) !== ''));   // se calcula una vez al entrar
+    currentFilter = ''; $('#searchPrev').value = '';
+    renderPreview();
+  }
+}
+[1, 2, 3].forEach(k => $('#t' + k).onclick = () => go(k));
+$('#to3').onclick = () => go(3);
+
+$('#file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadFile(f); };
+$('#itemtag').onchange = e => fromTag(e.target.value);
+
+// Arrastrar y soltar: contador para que dragenter/dragleave de los hijos no provoquen parpadeo
+const dz = $('#drop'); let dc = 0;
+dz.addEventListener('dragenter', e => { e.preventDefault(); dc++; dz.classList.add('hot'); });
+dz.addEventListener('dragover', e => e.preventDefault());
+dz.addEventListener('dragleave', () => { if (--dc <= 0) { dc = 0; dz.classList.remove('hot'); } });
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dc = 0; dz.classList.remove('hot');
+  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+// Evita que soltar un archivo fuera de la zona haga que el navegador lo abra y se pierda el trabajo
+['dragover', 'drop'].forEach(v => window.addEventListener(v, e => e.preventDefault()));
+</script>
+</body>
+</html>
