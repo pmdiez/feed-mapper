@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed Mapper</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22><text y=%2214%22 font-size=%2214%22>🧩</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14181f;--mut:#667085;--bd:#dde1e8;--ac:#0f766e;--acx:#fff;--bad:#c2261b;--badbg:#fde8e6;--ed:#fff6d6}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--tx:#e8ecf2;--mut:#93a0b2;--bd:#2a323d;--ac:#2dd4bf;--acx:#06201d;--bad:#ff8a80;--badbg:#3a1c1a;--ed:#3a3314}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+main{max-width:1200px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:0 0 4px;letter-spacing:-.01em}
+p.sub{margin:0 0 18px;color:var(--mut)}
+nav{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+nav button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}
+nav button.on{background:var(--ac);color:var(--acx);border-color:var(--ac)}
+nav button:disabled{opacity:.45;cursor:not-allowed}
+section{display:none;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:18px}
+section.on{display:block}
+#drop{border:2px dashed var(--bd);border-radius:10px;padding:40px 16px;text-align:center;color:var(--mut)}
+#drop.hot{border-color:var(--ac);color:var(--tx)}
+button.p,label.p{background:var(--ac);color:var(--acx);border:0;padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit;display:inline-block}
+button.s{background:transparent;color:var(--tx);border:1px solid var(--bd);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit}
+select,input[type=text]{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:5px 7px;max-width:100%}
+select:focus-visible,input:focus-visible,button:focus-visible,td:focus-visible{outline:2px solid var(--ac);outline-offset:1px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.mut{color:var(--mut)}
+.wrap{overflow-x:auto;border:1px solid var(--bd);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 9px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+th{background:var(--bg);font-weight:600;white-space:nowrap;position:sticky;top:0}
+#maprows td.smp{color:var(--mut);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.args input{width:130px;margin-right:4px}
+.req{margin-left:6px;font-size:12px;color:var(--bad)}
+#prev td{max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#prev td:focus{white-space:normal;overflow:visible}
+td.bad{background:var(--badbg)}
+td.ed{background:var(--ed)}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;background:var(--badbg);color:var(--bad);margin:0 6px 6px 0;font-size:13px}
+.chip.ok{background:var(--bg);color:var(--mut)}
+</style>
+</head>
+<body>
+<main>
+<h1>Feed Mapper</h1>
+<p class="sub">Carga un feed CSV, TSV o XML, mapea los campos y exporta para Google Merchant. Todo se procesa en tu navegador.</p>
+<nav>
+<button id="t1" class="on">Cargar feed</button>
+<button id="t2" disabled>Mapear campos</button>
+<button id="t3" disabled>Revisar y exportar</button>
+</nav>
+
+<section id="s1" class="on">
+<div id="drop">
+<p>Arrastra aquí tu archivo (.csv, .tsv, .txt, .xml)</p>
+<label class="p">Elegir archivo<input id="file" type="file" accept=".csv,.tsv,.txt,.xml,.rss" hidden></label>
+</div>
+<div id="info" class="row mut"></div>
+<div id="xmlsel" class="row" hidden>
+<span>Elemento que representa un producto:</span><select id="itemtag"></select>
+</div>
+</section>
+
+<section id="s2">
+<div class="row">
+<label>Destino: <select id="schema"></select></label>
+<span class="mut">El mapeo se guarda en este navegador para la próxima vez.</span>
+</div>
+<div class="wrap"><table>
+<thead><tr><th>Campo destino</th><th>Campo origen</th><th>Transformación</th><th>Parámetros</th><th>Ejemplo (1.ª fila)</th></tr></thead>
+<tbody id="maprows"></tbody></table></div>
+<div class="row"><input id="newf" type="text" placeholder="Nuevo campo (p. ej. custom_label_0)"><button class="s" id="addf">Añadir campo</button>
+<button class="p" id="to3" style="margin-left:auto">Revisar resultado</button></div>
+</section>
+
+<section id="s3">
+<div id="stats"></div>
+<p class="mut">Haz clic en cualquier celda para corregirla. Las celdas editadas se marcan en amarillo y se incluyen en la exportación. Se muestran las primeras 100 filas.</p>
+<div class="wrap" style="max-height:60vh"><table id="prev"><thead></thead><tbody></tbody></table></div>
+<div class="row">
+<label>Título del canal <input id="chT" type="text" value="Mi tienda"></label>
+<label>URL <input id="chL" type="text" value="https://example.com"></label>
+</div>
+<div class="row"><button class="p" id="dlx">Descargar XML</button><button class="s" id="dlc">Descargar CSV</button></div>
+</section>
+</main>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const mk=(r,o)=>[...r.split(' ').map(x=>[x,1]),...o.split(' ').map(x=>[x,0])];
+const SCHEMAS={
+ 'Google Merchant':{f:mk('id title description link image_link price availability','brand gtin mpn condition google_product_category product_type sale_price additional_image_link item_group_id color size gender age_group shipping_weight'),x:1},
+ 'Meta Catalog':{f:mk('id title description availability condition price link image_link brand','additional_image_link sale_price google_product_category item_group_id color size gender age_group'),x:1},
+ 'Personalizado (columnas de origen)':{f:null,x:0}
+};
+const AL={id:'id sku reference referencia productid codigo ref',title:'title name nombre titulo productname',description:'description descripcion desc summary',link:'link url producturl enlace',image_link:'imagelink image imageurl imagen picture img',price:'price precio pvp',availability:'availability stock disponibilidad quantity qty',brand:'brand marca manufacturer',gtin:'gtin ean upc barcode',condition:'condition estado',product_type:'producttype category categoria',item_group_id:'itemgroupid groupid',color:'color colour',size:'size talla',additional_image_link:'additionalimagelink images'};
+const TR=[['none','Copiar tal cual'],['fixed','Valor fijo'],['tpl','Plantilla {campo}'],['strip','Quitar HTML'],['trim','Recortar espacios'],['upper','MAYÚSCULAS'],['lower','minúsculas'],['replace','Buscar y reemplazar'],['price','Precio + moneda'],['avail','Stock a disponibilidad']];
+const S={rows:[],cols:[],schema:'Google Merchant',fields:[],map:{},ov:{},active:[],xml:null};
+const norm=s=>s.toLowerCase().replace(/^g:/,'').replace(/[^a-z0-9]/g,'');
+
+/* ---------- Carga ---------- */
+function loadFile(f){
+  $('#info').textContent='Leyendo '+f.name+'…';
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(['xml','rss'].includes(ext)){const r=new FileReader();r.onload=()=>parseXML(r.result);r.readAsText(f);}
+  else Papa.parse(f,{header:true,skipEmptyLines:true,worker:true,complete:r=>setRows(r.data,r.meta.fields||[])});
+}
+function parseXML(t){
+  const doc=new DOMParser().parseFromString(t,'application/xml');
+  if(doc.querySelector('parsererror')){$('#info').textContent='El XML no es válido. Revisa que el archivo esté completo.';return;}
+  const cnt={};
+  doc.querySelectorAll('*').forEach(e=>{if(e.children.length)cnt[e.tagName]=(cnt[e.tagName]||0)+1;});
+  const tags=Object.keys(cnt).filter(k=>cnt[k]>1).sort((a,b)=>cnt[b]-cnt[a]);
+  if(!tags.length){$('#info').textContent='No se encontraron elementos repetidos (productos) en el XML.';return;}
+  S.xml=doc;
+  $('#itemtag').innerHTML=tags.map(k=>`<option value="${esc(k)}">${esc(k)} (${cnt[k]})</option>`).join('');
+  $('#xmlsel').hidden=false;
+  fromTag(tags[0]);
+}
+function flat(el){
+  const o={};
+  for(const a of el.attributes)o['@'+a.name]=a.value;
+  (function walk(n,p){for(const c of n.children){const k=p?p+'.'+c.tagName:c.tagName;
+    if(c.children.length)walk(c,k);else{const v=c.textContent.trim();o[k]=k in o?o[k]+' | '+v:v;}}})(el,'');
+  return o;
+}
+function fromTag(tag){
+  const rows=[...S.xml.getElementsByTagName(tag)].map(flat);
+  const cols=[];const seen=new Set();
+  rows.forEach(r=>Object.keys(r).forEach(k=>{if(!seen.has(k)){seen.add(k);cols.push(k);}}));
+  setRows(rows,cols);
+}
+function setRows(rows,cols){
+  S.rows=rows;S.cols=cols;S.ov={};
+  $('#info').textContent=`${rows.length} productos y ${cols.length} campos de origen detectados.`;
+  $('#t2').disabled=false;$('#t3').disabled=false;
+  setSchema(S.schema);go(2);
+}
+
+/* ---------- Mapeo ---------- */
+function newMap(){return{src:'',tr:'none',a:'',b:''};}
+function setSchema(name){
+  S.schema=name;const sc=SCHEMAS[name];
+  S.fields=sc.f?sc.f.map(a=>[...a]):S.cols.map(c=>[c,0]);
+  S.map={};S.fields.forEach(([f])=>S.map[f]=newMap());
+  S.fields.forEach(([f])=>{
+    const m=S.map[f],al=(AL[f]||'').split(' ');al.push(norm(f));
+    const c=S.cols.find(c=>al.includes(norm(c)));
+    if(c){m.src=c;if(sc.x){if(f==='price'){m.tr='price';m.a='EUR';}if(f==='availability')m.tr='avail';if(f==='description')m.tr='strip';}}
+    else if(f==='condition'&&sc.x){m.tr='fixed';m.a='new';}
+  });
+  try{const sv=JSON.parse(localStorage.getItem('fm:'+name)||'null');
+    if(sv)for(const f in sv)if(S.map[f]){Object.assign(S.map[f],sv[f]);if(S.map[f].src&&!S.cols.includes(S.map[f].src))S.map[f].src='';}}catch(e){}
+  $('#schema').innerHTML=Object.keys(SCHEMAS).map(k=>`<option ${k===name?'selected':''}>${esc(k)}</option>`).join('');
+  renderMap();
+}
+function argsHtml(m){
+  const i=(k,p)=>`<input type="text" data-k="${k}" placeholder="${p}" value="${esc(m[k])}">`;
+  if(m.tr==='fixed')return i('a','Valor');
+  if(m.tr==='tpl')return i('a','{nombre} - {marca}');
+  if(m.tr==='price')return i('a','Moneda (EUR)');
+  if(m.tr==='replace')return i('a','Buscar')+i('b','Reemplazar');
+  return'';
+}
+function renderMap(){
+  $('#maprows').innerHTML=S.fields.map(([f,r])=>{const m=S.map[f];return`<tr data-f="${esc(f)}">
+<td><b>${esc(f)}</b>${r?'<span class="req">obligatorio</span>':''}</td>
+<td><select data-k="src"><option value="">(sin asignar)</option>${S.cols.map(c=>`<option value="${esc(c)}" ${c===m.src?'selected':''}>${esc(c)}</option>`).join('')}</select></td>
+<td><select data-k="tr">${TR.map(([k,l])=>`<option value="${k}" ${k===m.tr?'selected':''}>${l}</option>`).join('')}</select></td>
+<td class="args">${argsHtml(m)}</td><td class="smp"></td></tr>`}).join('');
+  S.fields.forEach(([f],i)=>sample(i));
+}
+function sample(i){const f=S.fields[i][0];const tr=$('#maprows').children[i];if(tr)tr.querySelector('.smp').textContent=calc(f,S.rows[0]||{}).slice(0,90);}
+$('#maprows').addEventListener('input',e=>{
+  const t=e.target,tr=t.closest('tr');if(!tr||!t.dataset.k)return;
+  const f=tr.dataset.f,m=S.map[f];m[t.dataset.k]=t.value;
+  if(t.dataset.k==='tr')tr.querySelector('.args').innerHTML=argsHtml(m);
+  sample([...tr.parentNode.children].indexOf(tr));
+  try{localStorage.setItem('fm:'+S.schema,JSON.stringify(S.map));}catch(e){}
+  S.ov={};
+});
+$('#schema').onchange=e=>setSchema(e.target.value);
+$('#addf').onclick=()=>{const n=$('#newf').value.trim();if(!n||S.map[n])return;S.fields.push([n,0]);S.map[n]=newMap();$('#newf').value='';renderMap();};
+
+function calc(f,row){
+  const m=S.map[f];if(!m)return'';
+  const v=m.src?String(row[m.src]??''):'';
+  switch(m.tr){
+    case'fixed':return m.a;
+    case'tpl':return m.a.replace(/\{([^}]+)\}/g,(_,k)=>row[k]??'');
+    case'strip':return v.replace(/<[^>]*>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ').trim();
+    case'trim':return v.trim();
+    case'upper':return v.toUpperCase();
+    case'lower':return v.toLowerCase();
+    case'replace':return m.a?v.split(m.a).join(m.b):v;
+    case'price':{const n=parseFloat(v.replace(/[^\d,.-]/g,'').replace(',','.'));return isNaN(n)?'':n.toFixed(2)+' '+(m.a||'EUR');}
+    case'avail':{const s=v.toLowerCase().trim(),n=parseFloat(s);
+      const ok=!isNaN(n)?n>0:/^(in|yes|si|sí|true|disponible|available)/.test(s);return ok?'in_stock':'out_of_stock';}
+    default:return v;
+  }
+}
+const val=(f,i)=>{const o=S.ov[i];return o&&f in o?o[f]:calc(f,S.rows[i]);};
+
+/* ---------- Revisión ---------- */
+function stats(){
+  let h=`<div class="row mut">${S.rows.length} productos · ${S.active.length} campos en el feed</div>`;
+  let bad=0;
+  S.active.forEach(([f,r])=>{if(!r)return;let n=0;for(let i=0;i<S.rows.length;i++)if(!val(f,i))n++;
+    if(n){bad++;h+=`<span class="chip">${esc(f)}: ${n} vacíos</span>`;}});
+  if(S.map.id){const seen=new Set();let d=0;for(let i=0;i<S.rows.length;i++){const v=val('id',i);if(v){if(seen.has(v))d++;seen.add(v);}}
+    if(d){bad++;h+=`<span class="chip">id: ${d} duplicados</span>`;}}
+  if(!bad)h+='<span class="chip ok">Sin problemas detectados en campos obligatorios</span>';
+  $('#stats').innerHTML=h;
+}
+function renderPreview(){
+  S.active=S.fields.filter(([f,r])=>r||S.rows.some((_,i)=>val(f,i)!==''));
+  $('#prev thead').innerHTML='<tr>'+S.active.map(([f])=>`<th>${esc(f)}</th>`).join('')+'</tr>';
+  const n=Math.min(100,S.rows.length);let h='';
+  for(let i=0;i<n;i++){h+='<tr>'+S.active.map(([f,r])=>{const v=val(f,i);
+    return`<td contenteditable="plaintext-only" data-i="${i}" data-f="${esc(f)}" data-r="${r}" class="${r&&!v?'bad':''}${S.ov[i]&&f in S.ov[i]?' ed':''}">${esc(v)}</td>`}).join('')+'</tr>';}
+  $('#prev tbody').innerHTML=h;stats();
+}
+$('#prev').addEventListener('focusout',e=>{
+  const t=e.target.closest('td[data-f]');if(!t)return;
+  const i=+t.dataset.i,f=t.dataset.f,txt=t.textContent;
+  if(txt!==val(f,i)){S.ov[i]={...S.ov[i],[f]:txt};t.classList.add('ed');}
+  t.classList.toggle('bad',t.dataset.r==='1'&&!txt);stats();
+});
+
+/* ---------- Exportación ---------- */
+function dl(name,text,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:mime}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000);}
+function table(){return S.rows.map((_,i)=>S.active.map(([f])=>val(f,i)));}
+$('#dlc').onclick=()=>dl('feed.csv',Papa.unparse({fields:S.active.map(a=>a[0]),data:table()}),'text/csv;charset=utf-8');
+$('#dlx').onclick=()=>{
+  const g=SCHEMAS[S.schema].x,bare=['title','description','link'];
+  const tag=f=>{const t=f.replace(/[^A-Za-z0-9_.-]/g,'_');return g&&!bare.includes(f)?'g:'+t:t;};
+  const o=['<?xml version="1.0" encoding="UTF-8"?>'];
+  if(g)o.push('<rss xmlns:g="http://base.google.com/ns/1.0" version="2.0"><channel>',`<title>${esc($('#chT').value)}</title><link>${esc($('#chL').value)}</link><description>Feed de productos</description>`);
+  else o.push('<items>');
+  const it=g?'item':'product';
+  S.rows.forEach((_,i)=>{o.push(`<${it}>`);
+    S.active.forEach(([f])=>{const v=val(f,i);if(v==='')return;
+      (f==='additional_image_link'?v.split(/\s*\|\s*/):[v]).forEach(x=>o.push(`<${tag(f)}>${esc(x)}</${tag(f)}>`));});
+    o.push(`</${it}>`);});
+  o.push(g?'</channel></rss>':'</items>');
+  dl('feed.xml',o.join('\n'),'application/xml;charset=utf-8');
+};
+
+/* ---------- Navegación y eventos ---------- */
+function go(n){[1,2,3].forEach(k=>{$('#s'+k).classList.toggle('on',k===n);$('#t'+k).classList.toggle('on',k===n);});if(n===3)renderPreview();}
+[1,2,3].forEach(k=>$('#t'+k).onclick=()=>go(k));
+$('#to3').onclick=()=>go(3);
+$('#file').onchange=e=>e.target.files[0]&&loadFile(e.target.files[0]);
+$('#itemtag').onchange=e=>fromTag(e.target.value);
+const dz=$('#drop');
+['dragover','dragenter'].forEach(v=>dz.addEventListener(v,e=>{e.preventDefault();dz.classList.add('hot');}));
+['dragleave','drop'].forEach(v=>dz.addEventListener(v,e=>{e.preventDefault();dz.classList.remove('hot');}));
+dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)loadFile(f);});
+</script>
+</body>
+</html>
