@@ -89,6 +89,17 @@ td.ed { background: var(--ed) !important; }
 td.ed::after { content: '✎'; position: absolute; top: 2px; right: 2px; font-size: 10px; color: var(--mut); }
 td.bad { background: var(--badbg) !important; color: var(--bad); font-weight: 500; }
 td.bad.ed::after { color: var(--bad); }
+td.warn { background: #fff7ed !important; color: #c2410c; font-weight: 500; }
+#validation { margin: 14px 0; }
+.val-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.val-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin:10px 0; }
+.val-card { background:var(--bg); border:1px solid var(--bd); border-radius:8px; padding:10px 12px; }
+.val-card strong { display:block; font-size:22px; line-height:1.3; }
+.val-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.val-item { border:1px solid var(--bd); border-radius:7px; padding:7px 10px; font-size:12px; background:var(--card); }
+.val-item.error { border-color:var(--bad); background:var(--badbg); }
+.val-item.warning { border-color:#f59e0b; background:#fffbeb; color:#92400e; }
+.val-item button { margin-left:8px; border:0; background:transparent; color:inherit; cursor:pointer; text-decoration:underline; font:inherit; }
 
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 99px; background: var(--badbg); color: var(--bad); margin: 0 6px 6px 0; font-size: 12px; font-weight: 500; }
 .chip.ok { background: var(--okbg); color: var(--ok); }
@@ -188,9 +199,11 @@ td.bad.ed::after { color: var(--bad); }
 <section id="s3">
   <div id="stats" style="margin-bottom: 16px;"></div>
 
+  <div id="validation"></div>
   <div class="row" style="background: var(--bg); padding: 12px; border-radius: 8px; border: 1px solid var(--bd);">
     <input id="searchPrev" type="search" placeholder="🔍 Buscar por ID o título en la vista previa..." style="flex:1; min-width: 200px;">
-    <span class="mut">Se muestran máx. 100 filas. Haz clic en una celda para corregirla; Enter para confirmar. Si cambias el mapeo, las ediciones manuales se descartan.</span>
+    <button class="s" id="showAll" type="button" disabled>Mostrar todos</button>
+    <span class="mut">Vista paginada: 500 filas por página. Haz clic en una celda para corregirla; Enter para confirmar. Si cambias el mapeo, las ediciones manuales se descartan.</span>
   </div>
 
   <div class="wrap" style="max-height: 55vh; margin-top: 12px;">
@@ -199,6 +212,7 @@ td.bad.ed::after { color: var(--bad); }
       <tbody></tbody>
     </table>
   </div>
+  <div id="pagination" class="row" style="justify-content:space-between; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;"></div>
 
   <div class="row" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--bd);">
     <div style="display:flex; gap:12px; flex:1; flex-wrap:wrap;">
@@ -279,18 +293,50 @@ function showLoader(show, text = 'Procesando...') {
   $('#loader').classList.toggle('on', show);
 }
 
-// --- Números: acepta 1,234.56 / 1.234,56 / 19.99 / 12,5 ---
+// --- Números: parser estricto para precios con coma o punto decimal ---
 function num(v) {
-  const s = String(v ?? '').replace(/[^\d.,-]/g, '');
-  const d = s.lastIndexOf('.'), c = s.lastIndexOf(',');
-  if (d < 0 && c < 0) return parseFloat(s);
-  const sep = d > c ? '.' : ',', other = sep === '.' ? ',' : '.';
-  let dec = true;
-  if (s.includes(other)) dec = true;                          // ambos presentes: el último es el decimal
-  else if (s.split(sep).length > 2) dec = false;              // 1.234.567
-  else if (/^-?[1-9]\d{0,2}[.,]\d{3}$/.test(s)) dec = false;  // 1.234 se interpreta como miles
-  const t = dec ? s.split(other).join('').replace(sep, '.') : s.split(sep).join('');
-  return parseFloat(t);
+  let s = String(v ?? '').trim().replace(/[^\d.,+-]/g, '');
+  if (!s || !/\d/.test(s)) return NaN;
+  if ((s.match(/[+-]/g) || []).length > 1 || (/[+-]/.test(s) && !/^[+-]/.test(s))) return NaN;
+  const sign = s[0] === '-' ? '-' : '';
+  s = s.replace(/^[+-]/, '');
+  if (!s || !/^\d/.test(s)) return NaN;
+  const dots = (s.match(/\./g) || []).length, commas = (s.match(/,/g) || []).length;
+  if (dots && commas) {
+    const dec = s.lastIndexOf('.') > s.lastIndexOf(',') ? '.' : ',';
+    const thousands = dec === '.' ? ',' : '.';
+    const parts = s.split(dec);
+    if (parts.length !== 2 || !/^\d{1,}$/.test(parts[1]) || !/^\d{1,3}(?:[.,]\d{3})*$/.test(parts[0])) return NaN;
+    s = parts[0].split(thousands).join('') + '.' + parts[1];
+  } else if (dots || commas) {
+    const sep = dots ? '.' : ',', count = dots || commas;
+    const parts = s.split(sep);
+    if (count > 1) {
+      if (!parts.every(p => /^\d+$/.test(p)) || !/^\d{1,3}$/.test(parts[0]) || !parts.slice(1).every(p => p.length === 3)) return NaN;
+      s = parts.join('');
+    } else {
+      if (!/^\d+$/.test(parts[0]) || !/^\d+$/.test(parts[1])) return NaN;
+      // Un separador seguido de tres cifras se interpreta como miles.
+      s = parts[1].length === 3 && parts[0].length <= 3 && parts[0][0] !== '0' ? parts.join('') : parts[0] + '.' + parts[1];
+    }
+  }
+  const n = Number(sign + s);
+  return Number.isFinite(n) ? n : NaN;
+}
+function priceCurrency(v) {
+  const m = String(v ?? '').trim().match(/(?:^|\s)([A-Z]{3})\s*$/i);
+  return m ? m[1].toUpperCase() : '';
+}
+function validUrl(v) {
+  try { const u = new URL(String(v).trim()); return ['http:', 'https:'].includes(u.protocol) && !!u.hostname && u.hostname.includes('.'); }
+  catch (e) { return false; }
+}
+function validGtin(v) {
+  const d = String(v ?? '').replace(/\s|-/g, '');
+  if (!/^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(d)) return false;
+  let sum = 0, weight = 3;
+  for (let i = d.length - 2; i >= 0; i--) { sum += Number(d[i]) * weight; weight = weight === 3 ? 1 : 3; }
+  return (10 - (sum % 10)) % 10 === Number(d[d.length - 1]);
 }
 
 // --- Carga de archivos ---
@@ -423,6 +469,7 @@ function applyMap(obj) {
     };
     n++;
   }
+  invalidateValidation();
   return n;
 }
 
@@ -430,6 +477,7 @@ function setSchema(name) {
   S.schema = name; const sc = SCHEMAS[name];
   S.fields = sc.f ? sc.f.map(a => [...a]) : S.cols.map(c => [c, 0]);
   S.map = {}; S.fields.forEach(([f]) => S.map[f] = newMap());
+  invalidateValidation();
 
   S.fields.forEach(([f]) => {
     const m = S.map[f], al = words(AL[f]); al.push(norm(f));
@@ -490,6 +538,7 @@ $('#maprows').addEventListener('input', e => {
   sample([...tr.parentNode.children].indexOf(tr));
   saveMap();
   S.ov = {};   // al cambiar el mapeo se descartan las ediciones manuales
+  invalidateValidation();
 });
 
 $('#schema').onchange = e => setSchema(e.target.value);
@@ -557,59 +606,185 @@ function calc(f, row) {
 }
 const val = (f, i) => { const o = S.ov[i]; return o && f in o ? o[f] : calc(f, S.rows[i]); };
 
+// --- Motor de validación: Merchant Center + controles comerciales ---
+const VAL = new Map();
+let ACTIVE_FIELDS = new Set();
+const issuesOf = i => {
+  if (!VAL.has(i)) VAL.set(i, validateRow(i));
+  return VAL.get(i);
+};
+function invalidateValidation() { VAL.clear(); }
+function validateRow(i) {
+  const issues = [];
+  const add = (level, code, field, message) => issues.push({ level, code, field, message });
+  const activeFields = ACTIVE_FIELDS;
+  const get = f => activeFields.has(f) || has(S.map, f) ? String(val(f, i) ?? '').trim() : '';
+  const exists = f => has(S.map, f) && (S.map[f].src || S.map[f].tr === 'fixed');
+  const priceRaw = get('price'), saleRaw = get('sale_price');
+  const p = priceRaw ? num(priceRaw) : NaN, sp = saleRaw ? num(saleRaw) : NaN;
+
+  // Requisitos / formato básico de Google Merchant Center.
+  for (const f of ['id','title','description','link','image_link','price','availability']) {
+    if (activeFields.has(f) && !get(f)) add('error','required',f,`Campo obligatorio "${f}" vacío`);
+  }
+  if (get('title') && get('title').length > 150) add('warning','title_length','title','Título superior a 150 caracteres');
+  if (get('description') && get('description').length > 5000) add('warning','description_length','description','Descripción superior a 5.000 caracteres');
+  for (const f of ['link','image_link']) {
+    const v = get(f);
+    if (v && !validUrl(v)) add('error','url',f,`La URL de "${f}" no es válida o no utiliza HTTP/HTTPS`);
+  }
+  if (priceRaw && !Number.isFinite(p)) add('error','price_format','price','Precio normal no numérico o con formato ambiguo');
+  if (saleRaw && !Number.isFinite(sp)) add('error','sale_format','sale_price','Precio de oferta no numérico o con formato ambiguo');
+  if (Number.isFinite(p) && p <= 0) add('error','price_nonpositive','price','El precio normal debe ser mayor que cero');
+  if (Number.isFinite(sp) && sp <= 0) add('error','sale_nonpositive','sale_price','El precio de oferta debe ser mayor que cero');
+  const availability = get('availability').toLowerCase();
+  if (availability && !['in_stock','out_of_stock','preorder','backorder'].includes(availability)) add('error','availability_value','availability','Disponibilidad no reconocida por Google Merchant Center');
+  const condition = get('condition').toLowerCase();
+  if (condition && !['new','refurbished','used'].includes(condition)) add('error','condition_value','condition','Estado debe ser new, refurbished o used');
+  const gtin = get('gtin');
+  if (gtin && !validGtin(gtin)) add('warning','gtin_invalid','gtin','GTIN/EAN con longitud o dígito de control incorrectos');
+
+  // Comparaciones comerciales entre precio normal y precio rebajado.
+  if (saleRaw && !priceRaw) add('error','sale_without_price','sale_price','Hay precio de oferta pero falta el precio normal');
+  if (Number.isFinite(p) && Number.isFinite(sp)) {
+    // Única incidencia comercial de comparación: la oferta supera al precio normal.
+    // Si ambos precios son iguales o la oferta es inferior, no se genera incidencia.
+    if (sp > p) add('error','sale_gt_price','sale_price',`La oferta (${saleRaw}) supera el precio normal (${priceRaw})`);
+    const pc = priceCurrency(priceRaw), sc = priceCurrency(saleRaw);
+    if (pc && sc && pc !== sc) add('error','currency_mismatch','sale_price',`Monedas diferentes: ${pc} frente a ${sc}`);
+  }
+  return issues;
+}
+function allValidation() {
+  const out = [];
+  for (let i = 0; i < S.rows.length; i++) {
+    const issues = issuesOf(i);
+    if (issues.length) out.push({ i, issues });
+  }
+  return out;
+}
+
 // --- Revisión ---
 let currentFilter = '';
+const PAGE_SIZE = 500;
+let currentPage = 0;
 
 function stats() {
-  const req = S.active.filter(a => a[1]).map(a => a[0]), emp = {}, seen = new Set();
-  req.forEach(f => emp[f] = 0);
   const hasId = has(S.map, 'id'); let dup = 0;
-  for (let i = 0; i < S.rows.length; i++) {          // una sola pasada sobre TODAS las filas
-    for (const f of req) if (!val(f, i)) emp[f]++;
-    if (hasId) { const v = val('id', i); if (v) { if (seen.has(v)) dup++; else seen.add(v); } }
+  const seen = new Set();
+  if (hasId) {
+    for (let i = 0; i < S.rows.length; i++) {
+      const v = val('id', i);
+      if (v) { if (seen.has(v)) dup++; else seen.add(v); }
+    }
   }
-  let h = `<div class="row mut" style="margin:0"><strong>${S.rows.length.toLocaleString()}</strong> productos totales · <strong>${S.active.length}</strong> campos en el feed</div>`;
-  let bad = 0;
-  req.forEach(f => { if (emp[f]) { bad++; h += `<span class="chip">⚠️ ${esc(f)}: ${emp[f].toLocaleString()} vacíos</span>`; } });
-  if (dup) { bad++; h += `<span class="chip">⚠️ id: ${dup.toLocaleString()} duplicados</span>`; }
-  if (!bad) h += '<span class="chip ok">✅ Sin problemas detectados en campos obligatorios</span>';
-  $('#stats').innerHTML = h;
+  const validation = allValidation();
+  const counts = {};
+  let errors = 0, warnings = 0;
+  validation.forEach(x => x.issues.forEach(issue => {
+    const key = issue.code + '::' + issue.field;
+    if (!counts[key]) counts[key] = { message: issue.message, level: issue.level, count: 0 };
+    counts[key].count++;
+    if (issue.level === 'error') errors++; else warnings++;
+  }));
+  let h = `<div class="val-head"><strong>Validación del feed</strong><span class="mut">${S.rows.length.toLocaleString()} productos analizados</span></div>`;
+  h += `<div class="val-grid">
+    <div class="val-card"><strong>${S.rows.length.toLocaleString()}</strong><span class="mut">Productos</span></div>
+    <div class="val-card"><strong style="color:var(--bad)">${errors}</strong><span class="mut">Errores</span></div>
+    <div class="val-card"><strong style="color:#d97706">${warnings}</strong><span class="mut">Advertencias</span></div>
+    <div class="val-card"><strong>${validation.length.toLocaleString()}</strong><span class="mut">Productos afectados</span></div>
+  </div>`;
+  if (dup) h += `<div class="val-item error">ID duplicados: ${dup}</div>`;
+  const entries = Object.entries(counts);
+  if (entries.length) {
+    h += '<div class="val-list">' + entries.map(([key,x]) => `<div class="val-item ${x.level}">${x.level === 'error' ? '⛔' : '⚠️'} ${esc(x.message)} <b>(${x.count})</b></div>`).join('') + '</div>';
+    h += `<div class="row" style="margin-bottom:0"><button class="s" id="showErrors">Ver solo productos con incidencias</button></div>`;
+  } else if (!dup) {
+    h += '<div class="val-item" style="border-color:var(--ok);color:var(--ok)">✓ No se han detectado errores ni advertencias en las validaciones configuradas.</div>';
+  }
+  $('#validation').innerHTML = h;
+  const btn = $('#showErrors');
+  if (btn) btn.onclick = () => { currentFilter = '__ISSUES__'; currentPage = 0; $('#searchPrev').value = ''; renderPreview(); };
+  const clear = $('#showAll');
+  if (clear) clear.disabled = !currentFilter;
 }
 
 function renderPreview() {
   $('#prev thead').innerHTML = '<tr>' + S.active.map(([f]) => `<th>${esc(f)}</th>`).join('') + '</tr>';
 
+  // Se calculan todos los índices coincidentes para que la paginación recorra
+  // el feed completo, no solo las primeras filas.
   const idx = [];
-  for (let i = 0; i < S.rows.length && (currentFilter || idx.length < 100); i++) {
-    if (!currentFilter || String(val('id', i)).toLowerCase().includes(currentFilter) || String(val('title', i)).toLowerCase().includes(currentFilter)) idx.push(i);
-    if (idx.length >= 100) break;
+  for (let i = 0; i < S.rows.length; i++) {
+    const matches = currentFilter === '__ISSUES__'
+      ? issuesOf(i).length > 0
+      : (!currentFilter || String(val('id', i)).toLowerCase().includes(currentFilter) || String(val('title', i)).toLowerCase().includes(currentFilter));
+    if (matches) idx.push(i);
   }
 
+  const totalPages = Math.max(1, Math.ceil(idx.length / PAGE_SIZE));
+  currentPage = Math.min(Math.max(0, currentPage), totalPages - 1);
+  const start = currentPage * PAGE_SIZE;
+  const visible = idx.slice(start, start + PAGE_SIZE);
+
   let h = '';
-  idx.forEach(i => {
+  visible.forEach(i => {
+    const rowIssues = issuesOf(i);
     h += '<tr>' + S.active.map(([f, r]) => {
       const v = val(f, i);
-      return `<td contenteditable="${CE}" data-i="${i}" data-f="${esc(f)}" data-r="${r}" class="${r && !v ? 'bad' : ''}${S.ov[i] && f in S.ov[i] ? ' ed' : ''}">${esc(v)}</td>`;
+      const issues = rowIssues.filter(x => x.field === f);
+      const cls = issues.some(x => x.level === 'error') ? 'bad' : (issues.length ? 'warn' : '');
+      const tip = issues.map(x => x.message).join(' | ');
+      return `<td contenteditable="${CE}" title="${esc(tip)}" data-i="${i}" data-f="${esc(f)}" data-r="${r}" class="${cls || (r && !v ? 'bad' : '')}${S.ov[i] && f in S.ov[i] ? ' ed' : ''}">${esc(v)}</td>`;
     }).join('') + '</tr>';
   });
   $('#prev tbody').innerHTML = h || '<tr><td colspan="100%" style="text-align:center; padding:24px; color:var(--mut);">No se encontraron resultados con ese filtro.</td></tr>';
-  stats();
+
+  const first = idx.length ? start + 1 : 0;
+  const last = Math.min(start + PAGE_SIZE, idx.length);
+  $('#pagination').innerHTML = `
+    <span class="mut">Mostrando ${first.toLocaleString()}–${last.toLocaleString()} de ${idx.length.toLocaleString()} productos coincidentes · Página ${currentPage + 1} de ${totalPages}</span>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button class="s" id="prevPage" ${currentPage === 0 ? 'disabled' : ''}>← Anterior</button>
+      <button class="s" id="nextPage" ${currentPage >= totalPages - 1 ? 'disabled' : ''}>Siguiente →</button>
+    </div>`;
+  $('#prevPage').onclick = () => { if (currentPage > 0) { currentPage--; renderPreview(); } };
+  $('#nextPage').onclick = () => { if (currentPage < totalPages - 1) { currentPage++; renderPreview(); } };
+  $('#showAll').disabled = !currentFilter;
 }
 
+const refreshStatsSoon = debounce(() => stats(), 300);
 $('#prev').addEventListener('focusout', e => {
   const t = e.target.closest('td[data-f]'); if (!t) return;
   const i = +t.dataset.i, f = t.dataset.f, txt = t.textContent;
-  if (txt !== val(f, i)) { S.ov[i] = { ...S.ov[i], [f]: txt }; t.classList.add('ed'); }
-  t.classList.toggle('bad', t.dataset.r === '1' && !txt);
-  stats();
+  if (txt === val(f, i)) return;
+  S.ov[i] = { ...S.ov[i], [f]: txt };
+  VAL.delete(i);
+  t.classList.add('ed');
+  const rowIssues = issuesOf(i);
+  const row = t.parentElement;
+  row.querySelectorAll('td[data-f]').forEach(cell => {
+    const field = cell.dataset.f;
+    const issues = rowIssues.filter(x => x.field === field);
+    cell.classList.toggle('bad', issues.some(x => x.level === 'error') || (cell.dataset.r === '1' && !String(val(field, i)).trim()));
+    cell.classList.toggle('warn', !issues.some(x => x.level === 'error') && issues.length > 0);
+    cell.title = issues.map(x => x.message).join(' | ');
+    if (S.ov[i] && field in S.ov[i]) cell.classList.add('ed');
+  });
+  refreshStatsSoon();
 });
 
 $('#prev').addEventListener('keydown', e => {          // Enter confirma la celda en vez de insertar un salto de línea
   if (e.key === 'Enter' && e.target.matches('td[data-f]')) { e.preventDefault(); e.target.blur(); }
 });
 
+$('#showAll').addEventListener('click', () => {
+  currentFilter = ''; currentPage = 0; $('#searchPrev').value = ''; renderPreview();
+});
+
 $('#searchPrev').addEventListener('input', debounce(() => {
   currentFilter = $('#searchPrev').value.toLowerCase().trim();
+  currentPage = 0;
   renderPreview();
 }, 200));
 
@@ -681,7 +856,10 @@ function go(n) {
   });
   if (n === 3) {
     S.active = S.fields.filter(([f, r]) => r || S.rows.some((_, i) => val(f, i) !== ''));   // se calcula una vez al entrar
-    currentFilter = ''; $('#searchPrev').value = '';
+    ACTIVE_FIELDS = new Set(S.active.map(a => a[0]));
+    invalidateValidation();
+    currentFilter = ''; currentPage = 0; $('#searchPrev').value = '';
+    stats();
     renderPreview();
   }
 }
